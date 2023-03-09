@@ -1,0 +1,1 @@
+This is my submission for Go excercises from https://gophercises.com/
