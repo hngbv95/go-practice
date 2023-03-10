@@ -1,13 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"encoding/csv"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 type Quiz struct {
@@ -44,47 +44,80 @@ func getQuiz(fileName string) ([]Quiz, error) {
 	return quizList, nil
 }
 
-func startQuiz(quizList []Quiz) (int, error) {
+func getAnswer() (<-chan string, <-chan error) {
+	// Since we are comunicating using channel
+	// Error would be returned using channel too
+	answChan := make(chan string)
+	errorChan := make(chan error)
+
+	go func() {
+		var answer string
+		_, err := fmt.Scanf("%s\n", &answer)
+
+		// Only return err/answer, not both
+		if err != nil {
+			errorChan <- err
+		} else {
+			answChan <- strings.ToLower(strings.TrimSpace(answer))
+		}
+		//Close right after use
+		close(answChan)
+		close(errorChan)
+	}()
+
+	return answChan, errorChan
+}
+
+func startQuiz(quizList []Quiz, timeout <-chan time.Time) (int, error) {
 	// Print Questions and Read user input, collect the answer
 	correctAnswer := 0
 	for _, quiz := range quizList {
-		inputReader := bufio.NewReader(os.Stdin)
-		fmt.Printf("Question : %v\nYour Answer: \n", quiz.question)
-		//read input
-		answer, err := inputReader.ReadString('\n')
-		if err != nil {
+		fmt.Printf("Question : %v = ", quiz.question)
+		answerChan, errorChan := getAnswer()
+
+		select {
+		case <-timeout:
+			fmt.Println("\nStop! Time up!")
+			return correctAnswer, nil
+		case answer := <-answerChan:
+			if answer == quiz.answer {
+				correctAnswer++
+			}
+		case err := <-errorChan:
 			return correctAnswer, err
-		}
-
-		answer = strings.TrimSpace(answer)
-		fmt.Println()
-
-		if answer == quiz.answer {
-			correctAnswer++
 		}
 	}
 
 	return correctAnswer, nil
 }
 
-func main() {
+func ReadFlag() (string, int) {
 	// Read arguments flag from command line
 	filePath := flag.String("f", "problem.csv", "Specify a file path for questions (.csv file)")
 	duration := flag.Int("t", 30, "The test duration")
-	suffle := flag.Bool("s", false, "should be suffle or not")
+	// suffle := flag.Bool("s", false, "should be suffle or not")
 	flag.Parse()
-	fmt.Println(*filePath)
 
-	quizList, err := getQuiz(*filePath)
+	return *filePath, *duration
+}
+
+func main() {
+
+	filePath, duration := ReadFlag()
+
+	quizList, err := getQuiz(filePath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	correctAnswer, err := startQuiz(quizList)
+	//Set Timer
+	timer := time.NewTimer(time.Duration(duration) * time.Second)
+
+	correctAnswer, err := startQuiz(quizList, timer.C)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Return the statistic
-	fmt.Printf("You are correct %v/%v questions\n", correctAnswer, len(quizList))
+	fmt.Printf("\nYou are correct %v/%v questions", correctAnswer, len(quizList))
 }
