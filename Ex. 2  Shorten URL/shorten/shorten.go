@@ -2,7 +2,30 @@ package shorten
 
 import (
 	"net/http"
+
+	"gopkg.in/yaml.v3"
 )
+
+type Path = string
+type URL = string
+
+type ShortenURL struct {
+	Path Path `yaml:"path"`
+	Url  URL  `yaml:"url"`
+}
+
+type ListShortenURL []ShortenURL
+type URLMap map[Path]URL
+
+func ListToMapURL(list ListShortenURL) URLMap {
+	m := URLMap{}
+
+	for _, v := range list {
+		m[v.Path] = v.Url
+	}
+
+	return m
+}
 
 // MapHandler will return an http.HandlerFunc (which also
 // implements http.Handler) that will attempt to map any
@@ -14,7 +37,6 @@ func MapHandler(pathsToUrls map[string]string, fallback http.Handler) http.Handl
 	//	TODO: Implement this...
 	var handler http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-
 		redirectPath, found := pathsToUrls[path]
 
 		if !found {
@@ -45,5 +67,23 @@ func MapHandler(pathsToUrls map[string]string, fallback http.Handler) http.Handl
 // a mapping of paths to urls.
 func YAMLHandler(yml []byte, fallback http.Handler) (http.HandlerFunc, error) {
 	// TODO: Implement this...
-	return nil, nil
+	shortenList := ListShortenURL{}
+
+	err := yaml.Unmarshal(yml, &shortenList)
+	if err != nil {
+		return nil, err
+	}
+
+	mapUrl := ListToMapURL(shortenList)
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		redirectPath, found := mapUrl[path]
+
+		if !found {
+			fallback.ServeHTTP(w, r)
+		} else {
+			http.Redirect(w, r, redirectPath, http.StatusMovedPermanently)
+		}
+	}, nil
 }
