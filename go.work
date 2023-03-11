@@ -1,0 +1,6 @@
+go 1.19
+
+use (
+	"./Ex. 2  Shorten URL"
+	"./Ex.1 Quiz Game"
+)
