@@ -2,5 +2,6 @@ go 1.19
 
 use (
 	"./Ex. 2  Shorten URL"
+	"./Ex. 3 Choose your own adventure"
 	"./Ex.1 Quiz Game"
 )
